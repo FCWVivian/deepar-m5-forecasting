@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS
+.DS_Store
+
+# Data & model artifacts (download / regenerate locally, see data/README.md)
+data/*
+!data/README.md
+models/
+*.npy
+*.csv
+*.pkl
+*.pt
+*.pth
+*.pth.tar
+*.zip
+deepar/experiments/*/figures/
+deepar/experiments/*/*.log
+deepar/experiments/*/*.pth.tar
+deepar/experiments/*/metrics_*.json

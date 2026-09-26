@@ -1,0 +1,17 @@
+# Core
+torch>=2.0
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+seaborn
+tqdm
+
+# Notebooks
+jupyter
+ipywidgets
+fastprogress
+joblib
+dask[dataframe]
+lightgbm
