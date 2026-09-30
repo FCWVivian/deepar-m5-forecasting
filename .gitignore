@@ -23,3 +23,7 @@ deepar/experiments/*/figures/
 deepar/experiments/*/*.log
 deepar/experiments/*/*.pth.tar
 deepar/experiments/*/metrics_*.json
+
+# Experiment outputs: keep the score table, not forecasts / weights / logs
+results/*
+!results/metrics.csv

@@ -1,5 +1,5 @@
 # Core
-torch>=2.0
+torch>=2.4          # results were produced on 2.14; see README note on MPS
 numpy
 pandas
 scipy
