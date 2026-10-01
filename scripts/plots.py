@@ -9,7 +9,8 @@ from m5.data import HORIZON, RESULTS_DIR, SPLITS, load_sales, sales_matrix
 
 ASSETS = RESULTS_DIR.parent / "assets"
 INK, MUTED, GRID = "#0b0b0b", "#8a8984", "#e6e5e1"
-SERIES = {"lightgbm_tweedie": ("LightGBM (Tweedie)", "#2a78d6"), "deepar_nb": ("DeepAR (neg. binomial)", "#eb6834")}
+SERIES = {"lightgbm_tweedie": ("LightGBM (Tweedie)", "#2a78d6"), "deepar_nb": ("DeepAR (neg. binomial)", "#eb6834"),
+          "transformer_nb": ("Transformer (fixed, global)", "#1baf7a")}
 LABELS = {"zeros": "All zeros", "naive": "Naive (last day)", "seasonal_naive": "Seasonal naive",
           "moving_avg_28": "28-day moving average", "lightgbm_l2": "LightGBM (MSE loss)",
           **{k: v[0] for k, v in SERIES.items()}}
@@ -55,15 +56,18 @@ for ax, (title, pick) in zip(axes, panels):
     ax.set_title(title, loc="left", color=INK)
     ax.yaxis.grid(True, color=GRID)
     ax.set_ylabel("Units sold")
-axes[0].legend(frameon=False, loc="upper left", ncol=3)
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, frameon=False, loc="upper center", ncol=len(labels))
 axes[1].set_xlabel("Day (d_)")
-fig.tight_layout()
+fig.tight_layout(rect=(0, 0, 1, 0.95))
 fig.savefig(ASSETS / "forecasts_test.png", dpi=150)
 
 # 3. single-item RMSE, same item and 28 days as the capstone notebooks
 actual = y[item, start:start + HORIZON]
 rows = {"Transformer, pretrained + fine-tuned (capstone)": 1.2406}
 for m in ["moving_avg_28", "seasonal_naive", *SERIES]:
+    if not (RESULTS_DIR / "forecasts" / f"{m}_test.npy").exists():
+        continue
     f = np.load(RESULTS_DIR / "forecasts" / f"{m}_test.npy")[item]
     rows[LABELS[m]] = float(np.sqrt(((actual - f) ** 2).mean()))
 print("| Model | RMSE |\n|---|---|")
