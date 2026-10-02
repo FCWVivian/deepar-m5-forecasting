@@ -60,6 +60,19 @@ implementation, the naive and seasonal-naive scores match the values commonly re
   A series that sells 0–5 units a day, 29% of them zero, is mostly noise over 28 days. The global models' advantage
   shows up in aggregate: they get the weekly cycle and overall level right across thousands of series.
 
+## Capstone goal, and whether it was met
+
+The team's stated objective was to *"apply different time-series models and compare their pros and cons for predicting
+future retail demand"* on M5, comparing DeepAR (LSTM-based), a Transformer, and Transformer variants. The original
+report concluded the Transformer was clearly superior. With proper evaluation, that conclusion did not hold.
+
+| Part of the goal | Met? | Notes |
+|---|---|---|
+| Compare model families fairly | ✅ | Same training setup (global), same inputs, same test window, same metric, with baselines |
+| Forecast retail demand accurately | ✅ mostly | ~25% better than seasonal naive on WRMSSE; solid, though not competition-level (top M5 entries used large tuned ensembles) |
+| Identify each model's pros and cons | ⚠️ partly | Accuracy is compared rigorously (the models tie); cost, interpretability, and probabilistic accuracy are not yet compared side by side |
+| Show business value | ❌ not yet | Forecast error is measured, but not its effect on stockouts or inventory cost |
+
 ## What went wrong in the capstone, and what changed
 
 | Capstone (2024) | Follow-up (2026) |
@@ -93,6 +106,20 @@ line in the capstone chart (see [The original capstone](#the-original-capstone))
    predicts `μ = mean × multiplier + small additive term`.
 4. **Hardware.** Forecasting with 100k-row batches on Apple's MPS backend gave silently wrong LSTM outputs in
    PyTorch 2.2. Forecast batches are now capped at 512 rows, and the results were produced on PyTorch 2.14.
+
+## Next steps
+
+1. **Backtest over several windows.** All results come from one 28-day test period, and DeepAR's seed-to-seed spread
+   (0.632 vs 0.662) is as large as the gaps between models. Rolling-origin evaluation over several windows would show
+   whether the ranking is stable.
+2. **Score the probabilistic forecasts.** DeepAR and the Transformer predict full negative-binomial distributions, but
+   only their means are scored. Evaluating quantiles with M5's uncertainty metric (WSPL) would measure their main advantage.
+3. **Compare cost, not just accuracy.** LightGBM trains in roughly 10–20 minutes on CPU; the Transformer needs about an hour
+   per split on an M2 Pro GPU. Recording training/inference time and memory turns "they tie" into a deployment decision.
+4. **Ensemble the three models.** The capstone report proposed combining DeepAR and Transformers; a simple average of
+   the three global models is cheap to try and often beats each one.
+5. **Translate accuracy into business impact.** Simulate inventory decisions (order-up-to levels from the forecast
+   quantiles) and measure stockouts and overstock, to show what a 25% WRMSSE improvement is worth.
 
 ## Repository layout
 
