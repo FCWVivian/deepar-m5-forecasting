@@ -7,58 +7,59 @@ UC Berkeley capstone (2023–2024) on deep-learning forecasting for the **M5 Wal
 > is [miloscola/Capsrone23-DeepAR](https://github.com/miloscola/Capsrone23-DeepAR). See [Team & credits](#team--credits).
 
 **TL;DR**
-- The capstone's headline model, a Transformer pretrained on related items and fine-tuned on one item, **did not beat a
-  28-day moving average** on that item (RMSE 1.24 vs 1.08). It was also only ever evaluated on that single item.
-- The follow-up evaluates every model on **all 30,490 series with the official M5 metric (WRMSSE)**, against simple
-  baselines. There, **global models** (one model trained across all series) beat seasonal naive by **23–27%**.
-- A global **DeepAR** (LSTM), the **capstone Transformer with its bugs fixed** and trained globally, and a global
-  **LightGBM** all end up roughly tied (0.63–0.67). Attention did not beat the LSTM or the trees here.
+- The capstone's Transformer **lost to a simple 28-day moving average** (RMSE 1.24 vs 1.08 on its test item).
+- After fixing its bugs and training one model on all 30,490 series, **every model beat the seasonal-naive baseline by about 25%**.
+- DeepAR (LSTM), the fixed Transformer, and LightGBM **ended up tied**. How the models were trained and evaluated
+  mattered more than which one was used.
 
 ![Test WRMSSE by model](assets/wrmsse_test.png)
 
 ## Results
 
-Test period: d_1914–1941 (28 days, the M5 public-leaderboard window). Validation: the 28 days before it.
-Lower is better; WRMSSE averages 12 aggregation levels, from total sales down to individual item-store series.
+Scored on the last 28 days of M5 with **WRMSSE**, the official M5 metric (lower is better).
 
-| Model | Valid WRMSSE | Test WRMSSE | vs. seasonal naive (test) |
-|---|---|---|---|
-| **DeepAR, negative binomial** (seed 0 / seed 1) | 0.545 / – | **0.632 / 0.662** | −27% / −24% |
-| **Transformer, fixed and global** | 0.574 | **0.650** | −25% |
-| **LightGBM, MSE loss** | 0.532 | **0.655** | −25% |
-| **LightGBM, Tweedie loss** | 0.520 | **0.671** | −23% |
-| Seasonal naive (repeat last week) | 0.923 | 0.870 | – |
-| 28-day moving average | 1.098 | 1.082 | +24% |
-| Naive (repeat last day) | 1.486 | 1.464 | +68% |
-
-Full per-level scores are in [`results/metrics.csv`](results/metrics.csv). As a sanity check on the metric
-implementation, the naive and seasonal-naive scores match the values commonly reported for this window.
+| Model | Test score | vs. seasonal naive |
+|---|---|---|
+| **DeepAR** (2 runs) | **0.632 / 0.662** | 24–27% better |
+| **Transformer** (fixed) | **0.650** | 25% better |
+| **LightGBM** (MSE / Tweedie loss) | **0.655 / 0.671** | 23–25% better |
+| Seasonal naive (repeat last week) | 0.870 | baseline |
+| 28-day moving average | 1.082 | 24% worse |
+| Naive (repeat yesterday) | 1.464 | 68% worse |
 
 ![Forecasts vs actuals](assets/forecasts_test.png)
 
-**What the numbers say**
-- **Global training is what matters, not the architecture.** All three global models are far ahead of the
-  baselines, and the spread between them (0.63–0.67) is about the same size as DeepAR's seed-to-seed variation
-  (0.632 vs 0.662). The fixed Transformer (attention over time) lands in the middle of that band.
-- **The loss function mattered less than expected.** Tweedie is the textbook choice for zero-heavy counts, but LightGBM
-  with plain MSE did slightly better on test (0.655 vs 0.671) and slightly worse on validation. Loss was not the main problem.
-- **On a single high-volume series, the gain is small.** For the best seller (bottom panel above), both models
-  track the weekly cycle but are roughly level with seasonal naive (RMSE 26.8 LightGBM, 27.9 Transformer, 28.4 DeepAR,
-  26.6 seasonal naive, 35.6 moving average). The advantage comes from being consistently good across all 30,490 series.
-- **One sparse item can't rank models.** On the capstone's example item, every model forecasts roughly the item's
-  average level:
+**Key takeaways**
+- **Training one model on all series is what made the difference.** The three model types are within noise of each other.
+- **The loss function barely mattered.** LightGBM scored about the same with MSE and with Tweedie loss.
+- **One item can't rank models.** On the capstone's sparse test item, even the new models don't beat the moving average.
+  Their advantage shows up across thousands of series.
 
-  | Model, on `HOBBIES_1_005_CA_1`, d_1914–1941 | RMSE |
-  |---|---|
-  | 28-day moving average | 1.08 |
-  | DeepAR, negative binomial (global) | 1.13 |
-  | Transformer, fixed (global) | 1.13 |
-  | LightGBM, Tweedie (global) | 1.15 |
-  | Transformer, pretrained + fine-tuned (capstone) | 1.24 |
-  | Seasonal naive | 1.66 |
+<details>
+<summary>More detail: validation scores, single-series results</summary>
 
-  A series that sells 0–5 units a day, 29% of them zero, is mostly noise over 28 days. The global models' advantage
-  shows up in aggregate: they get the weekly cycle and overall level right across thousands of series.
+Test period d_1914–1941; validation is the 28 days before it. Full per-level scores are in
+[`results/metrics.csv`](results/metrics.csv).
+
+| Model | Validation | Test |
+|---|---|---|
+| DeepAR (seed 0 / seed 1) | 0.545 / – | 0.632 / 0.662 |
+| Transformer, fixed | 0.574 | 0.650 |
+| LightGBM, MSE / Tweedie | 0.532 / 0.520 | 0.655 / 0.671 |
+| Seasonal naive | 0.923 | 0.870 |
+
+RMSE on single series, d_1914–1941:
+
+| Model | `HOBBIES_1_005_CA_1` (sparse, the capstone's item) | `FOODS_3_090_CA_3` (best seller) |
+|---|---|---|
+| 28-day moving average | 1.08 | 35.6 |
+| Seasonal naive | 1.66 | 26.6 |
+| LightGBM, Tweedie | 1.15 | 26.8 |
+| Transformer, fixed | 1.13 | 27.9 |
+| DeepAR | 1.13 | 28.4 |
+| Transformer, capstone | 1.24 | – |
+
+</details>
 
 ## Capstone goal, and whether it was met
 
