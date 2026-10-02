@@ -77,49 +77,43 @@ report concluded the Transformer was clearly superior. With proper evaluation, t
 
 | Capstone (2024) | Follow-up (2026) |
 |---|---|
-| One model per item, trained on a single series | One model across all 30,490 series (`m5/`, `scripts/`) |
-| Judged by a plot and RMSE on one item | WRMSSE on all series, 12 aggregation levels (`m5/wrmsse.py`) |
-| No baselines | Naive, seasonal naive, moving average |
-| No separate validation set | Validation split for tuning; test touched once per model |
+| A separate model for each item | One model trained on all 30,490 series |
+| Judged on one item | Scored on all series with the official M5 metric |
+| No baselines | Compared against simple baselines |
+| No validation set | Tuned on validation, test used once |
 
-**Why the capstone Transformer produced a flat line.** Re-reading the notebooks turned up three bugs in the model
-itself:
-1. **Attention ran across the batch, not across time.** Inputs were `(batch, 196 days, features)`, but
-   `nn.TransformerEncoderLayer` was left at its default `batch_first=False` (notebooks 03–07), so it treated the
-   batch as the sequence.
-   Self-attention mixed the 10 random windows in each batch and never compared days within a window, and the
-   positional encoding was indexed by batch position instead of day.
-2. **The forecast was decoded from the oldest day.** `self.decoder(x[:, -196, :])` (notebooks 04–07) picks index
-   −196 of a 196-day window, i.e. day 0, the one furthest from the forecast period.
-3. **Most of the loss was spent reconstructing the input.** The model output 224 values (196 input days + 28
-   forecast days) and the MSE loss covered all of them.
+**Why the capstone Transformer gave a flat line:** it had three bugs.
+1. Attention compared different samples in the batch instead of different days.
+2. The forecast was made from the oldest day instead of the most recent one.
+3. Most of the training effort went into copying the input, not forecasting.
 
-With no access to recent days, the best the model could do was predict the item's average, which is the flat
-line in the capstone chart (see [The original capstone](#the-original-capstone)). The fixed version, trained globally, is in `m5/transformer.py` (results above).
+So the model couldn't see recent sales and just predicted the average. The fixed version is in `m5/transformer.py`.
 
-**Debugging notes from getting DeepAR to work.** The first global DeepAR scored 2.47, worse than naive. The causes were:
-1. **A price outlier.** The raw week-over-week price ratio reached 897× for one item. It is now a log ratio clipped to ±1.
-2. **Missing lag inputs.** The model only saw yesterday's sales. Adding lags 1/7/14/28, as in the DeepAR paper and
-   GluonTS, is what let it learn the weekly cycle.
-3. **Scaling.** Anchoring μ to `(mean + 1)` biased low-volume series up and high-volume series down. Dividing inputs
-   by the raw mean produced inputs above 1,000 for sparse series. The final model divides inputs by `mean + 1` and
-   predicts `μ = mean × multiplier + small additive term`.
-4. **Hardware.** Forecasting with 100k-row batches on Apple's MPS backend gave silently wrong LSTM outputs in
-   PyTorch 2.2. Forecast batches are now capped at 512 rows, and the results were produced on PyTorch 2.14.
+<details>
+<summary>Technical details: the Transformer bugs, and what it took to get DeepAR working</summary>
+
+**Transformer bugs (notebooks 03–07)**
+- `nn.TransformerEncoderLayer` used its default `batch_first=False` with `(batch, time, features)` inputs, so
+  attention ran over the batch axis and the positional encoding was indexed by batch position.
+- `self.decoder(x[:, -196, :])` decoded from index −196 of a 196-day window, i.e. the oldest day.
+- The model output 224 values (196 input days + 28 forecasts) and the MSE loss covered all of them.
+
+**DeepAR fixes.** The first global DeepAR scored 2.47, worse than naive.
+- A price outlier (a 897× week-over-week ratio): now a log ratio clipped to ±1.
+- Only yesterday's sales as input: added lags 1/7/14/28, as in the DeepAR paper.
+- Scaling: inputs are divided by `mean + 1`; the output is `mean × multiplier + small extra term`.
+- PyTorch 2.2 on Apple MPS returned wrong LSTM outputs for large batches: forecast batches are capped at 512 rows,
+  and results were produced on PyTorch 2.14.
+
+</details>
 
 ## Next steps
 
-1. **Backtest over several windows.** All results come from one 28-day test period, and DeepAR's seed-to-seed spread
-   (0.632 vs 0.662) is as large as the gaps between models. Rolling-origin evaluation over several windows would show
-   whether the ranking is stable.
-2. **Score the probabilistic forecasts.** DeepAR and the Transformer predict full negative-binomial distributions, but
-   only their means are scored. Evaluating quantiles with M5's uncertainty metric (WSPL) would measure their main advantage.
-3. **Compare cost, not just accuracy.** LightGBM trains in roughly 10–20 minutes on CPU; the Transformer needs about an hour
-   per split on an M2 Pro GPU. Recording training/inference time and memory turns "they tie" into a deployment decision.
-4. **Ensemble the three models.** The capstone report proposed combining DeepAR and Transformers; a simple average of
-   the three global models is cheap to try and often beats each one.
-5. **Translate accuracy into business impact.** Simulate inventory decisions (order-up-to levels from the forecast
-   quantiles) and measure stockouts and overstock, to show what a 25% WRMSSE improvement is worth.
+1. **Test on more time periods.** Results come from a single 28-day window.
+2. **Score the uncertainty forecasts.** DeepAR and the Transformer predict ranges, but only their averages are scored.
+3. **Compare speed and cost.** LightGBM trains in minutes on CPU; the Transformer needs about an hour on GPU.
+4. **Combine the three models.** Averaging them is easy and often more accurate.
+5. **Measure business impact.** Estimate how many stockouts and how much overstock the better forecasts would avoid.
 
 ## Repository layout
 
@@ -174,7 +168,7 @@ heads, and pretraining on the same item across 4 California stores before fine-t
 
 ![Capstone Transformer forecast](assets/transformer_pretrained.png)
 *The capstone's pretrained + fine-tuned Transformer on `HOBBIES_1_005_CA_1`. It captures the average level but none
-of the spikes, and scores worse than a moving average. See "Why the capstone Transformer produced a flat line" above.*
+of the spikes, and scores worse than a moving average. See "Why the capstone Transformer gave a flat line" above.*
 
 | Notebook | Contents |
 |---|---|
